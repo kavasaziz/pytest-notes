@@ -1,0 +1,90 @@
+#+title: Test Automation Frameworks with PyTest
+
+** Overview
+This document aims to teach ~PyTest~ to enable readers to update and contribute automation frameworks.
+
+There is one important file in this repository which is ~pytest.org~. By inspiring from literate programming idea, this file is main source to generate both document and code used in this repository.
+
+** License
+[[https://github.com/kavasaziz/pytest-notes][Test Automation Frameworks with PyTest]] by [[https://github.com/kavasaziz][Aziz KAVAS]] is licensed under [[https://creativecommons.org/licenses/by-nc-sa/4.0/?ref=chooser-v1][CC BY-NC-SA 4.0]]
+
+[[https://mirrors.creativecommons.org/presskit/icons/cc.svg?ref=chooser-v1]] [[https://mirrors.creativecommons.org/presskit/icons/by.svg?ref=chooser-v1]] [[https://mirrors.creativecommons.org/presskit/icons/nc.svg?ref=chooser-v1]] [[https://mirrors.creativecommons.org/presskit/icons/sa.svg?ref=chooser-v1]]
+
+*** License Summary
+
+- *Attribution*: You must give appropriate credit, provide a link to the license, and indicate if changes were made. You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.
+- *NonCommercial*: You may not use the material for commercial purposes.
+- *ShareAlike*: If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
+
+  For more details, see the [[file:LICENSE.txt][license file]].
+
+** Target Audience
+Target audience of this work is the developers who use automated test frameworks during their daily workflow and aims to teach them how can improve, contirbute and benefit more from it.
+
+** Contents
+This document consist of 2 main sections:
+1. *Introduction*: This section aims to create fundamental understanding about ~PyTest~ and automation frameworks. This part includes the headers until and including [[file:pytest.org::*Basics of Test Results Reporting and Tracking Test History][Basics of Test Results Reporting and Tracking Test History]].
+2. *Framework Customization*: This section includes the impletation of best practices mentioned in the introduction. Besides, it explains the usage of some commonly used 3rd party plugins and tips about how to structurize tests for real-life practices.
+
+** Usage
+Each section is seperated under a specific commit. Thus, if readers wish to run the codes used while explaining the ~fixtures~, they can just checkout related commit via ~git checkout <commit-sha>~.
+
+Specific to emacs user, final form of the repository can be generated via ~M-x org-babel-tangle~ command.
+
+** Contributing
+Please do not hesitate to contact to share your feedbacks.
+
+** Installation
+Brief instructions on how to install the packages required for this repository on a Debian-based system are given below:
+
+1. Update your package manager and install virtual environment for python.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output
+sudo apt-get update
+sudo apt-get install python3-venv
+  #+end_src
+2. Upgrade the pip.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output
+python3 -m pip install --upgrade pip
+  #+end_src
+3. I will place my repository inside ~${HOME}/venvs/frameworkenv/~ folder. Therefore, create virtual environment inside this file.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output
+cd ~/venvs/frameworkenv/
+python -m venv ./venv
+  #+end_src
+4. Activate virtual environment and install ~pytest~.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output :dir ~/venvs/frameworkenv/
+source ./venv/bin/activate
+python -m pip install pytest
+  #+end_src
+5. To quit from virtaul env just use ~deactivate~ command.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output :dir ~/venvs/frameworkenv/
+deactivate
+  #+end_src
+6. (Extra) To see the list of installed packages, you can use ~pip list~ or ~pip freeze~.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output :dir ~/venvs/frameworkenv/
+pip list 2>&1
+pip freeze # This can be used to generate requirements.txt file also
+  #+end_src
+If you are facing another issue about management of python packges see more about python package management guide [[https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/][here]].
+
+** Revision History
+No publishing yet.
+
+** Acknowledgements
+I would like to express my gratitude to the authors and contributors of the pytest documentation, whose insights and explanations have served as a valuable resource in the creation of this teaching document. Their dedication to clarity and thoroughness has been instrumental in shaping the content presented here.
+
+** Disclaimer
+/Note: Include any necessary disclaimers or notices regarding the use of the documentation./
+
+1. *Accuracy Disclaimer:* This documentation is provided for informational purposes only. While efforts have been made to ensure the accuracy of the information presented, no guarantees are made regarding its completeness or suitability for any particular purpose.
+
+2. *Limited Liability:* The creator of this documentation shall not be held liable for any direct, indirect, incidental, special, or consequential damages arising out of the use of or reliance on the information provided herein.
+
+3. *Subject to Change:* This documentation is subject to change without notice. The creator reserves the right to update, modify, or remove content as deemed necessary.
+
+4. *License Disclaimer:* Unless otherwise specified, all content in this documentation is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License. Users are encouraged to review the full license text for details regarding permissible uses.
+
+** Contact
+For inquiries, clarifications, or permission for uses not covered by the license, please contact:
+- Name: Aziz KAVAS
+- Email: kavasaziz@gmail.com

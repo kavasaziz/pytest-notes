@@ -1,0 +1,243 @@
+#+title: pytest
+#+startup: show2levels
+
+* Pytest Testing Framework
+** Table of Contents :TOC:
+- [[#pytest-testing-framework][Pytest Testing Framework]]
+  - [[#installation][Installation]]
+  - [[#pytest-introduction][PyTest Introduction]]
+  - [[#test-searching][Test Searching]]
+  - [[#save-time-and-code-with-test-fixtures][Save Time and Code with Test Fixtures]]
+  - [[#basics-of-reporting-test-results-and-tracking-test-history][Basics of Reporting Test Results and Tracking Test History]]
+  - [[#customizing-test-runs-with-the-command-line-and-configuration-files][Customizing Test Runs with the Command Line and Configuration Files]]
+  - [[#handling-skips-and-expected-failures][Handling Skips and Expected Failures]]
+  - [[#cross-browser-and-data-driven-testing-with-parametrize][Cross-Browser and Data-driven testing with parametrize]]
+  - [[#fast-testing-with-pytest-xdist-and-parallel-vs-concurrent][Fast Testing with Pytest-xdist, and Parallel vs Concurrent]]
+  - [[#writing-unit-tests-white-box-testing-with-tox][Writing Unit Tests (White Box Testing) with Tox]]
+  - [[#writing-functional-tests-blackgrey-box-testing][Writing Functional Tests (Black/Grey Box Testing)]]
+
+** Installation
+Brief instructions on how to install the packages required for this repository on a Debian-based system are given below:
+
+1. Update your package manager and install virtual environment for python.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output
+sudo apt-get update
+sudo apt-get install python3-venv
+  #+end_src
+
+2. Upgrade the pip.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output
+python3 -m pip install --upgrade pip
+  #+end_src
+
+3. I will place my repository inside ~${HOME}/venvs/frameworkenv/~ folder. Therefore, create virtual environment inside this file.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output
+cd ~/venvs/frameworkenv/
+python -m venv ./venv
+  #+end_src
+
+4. Activate virtual environment and install ~pytest~.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output :dir ~/venvs/frameworkenv/
+source ./bin/activate
+python -m pip install pytest
+  #+end_src
+
+5. To quit from virtaul env just use ~deactivate~ command.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output :dir ~/venvs/frameworkenv/
+deactivate
+  #+end_src
+
+6. (Extra) To see the list of installed packages, you can use ~pip list~ or ~pip freeze~.
+  #+begin_src shell :shebang #!/usr/bin/env bash :results output :dir ~/venvs/frameworkenv/
+pip list 2>&1
+pip freeze # This can be used to generate requirements.txt file also
+  #+end_src
+
+If you are facing another issue about management of python packges see more about python package management guide [[https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/][here]].
+** PyTest Introduction
+Test searching patterns of pytest is defined under =pytest.ini= file. The default patters are given below:
+#+name: sample-[[pytest]]-ini
+#+begin_src toml :tangle ~/venvs/frameworkenv/pytest.ini
+[pytest]
+python_files = test_*
+python_classes = *Tests
+python_functions = test_*
+#+end_src
+
+From those we can say that
+- ~test_widget.py~ called files will be selected
+- ~WidgetTests~ called class will be selected
+- ~test_widget_click~ called function will be selected
+
+To run tests just use ~pytest~ (add ~-v~ to have verbose output)
+#+begin_src shell :shebang #!/usr/bin/env bash :results output
+pytest -v
+#+end_src
+
+** Test Searching
+Most common issue about test suites is that they require significant code refactoring when you want to create a new test suites, such as regression suite, smoke suit and unittest suite. This is caused since test file and test functions placement of tests are made for the suite. Therefore, for each suit, you will need to make a lot of copy paste, and which will make your suite and code hard to maintain.
+
+Besides, it is not also easy to find location of the test under such a big code stack. Therefore, devide your test files and functions under more related units. For instance, if you see a failing test called ~test_ui_open~ you can easily that, it should be inside =entertainment= folder.
+#+begin_example
+.
+├── pytest.ini
+├── venv
+└── tests
+    └── sportscar
+        ├── body
+        ├── engine
+        └── entertainment
+#+end_example
+
+Lets create quick fake tests files
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/tests/sportscar :results output
+for file in $(ls); do touch $file/test_$file.py ; done
+#+end_src
+
+and some fake tests:
+- body
+  #+begin_src python
+def test_body_functions_as_expected():
+    assert True
+  #+end_src
+- engine
+  #+begin_src python
+def test_engine_functions_as_expected():
+    assert True
+  #+end_src
+- entertainment
+  #+begin_src python
+def test_entertainment_functions_as_expected():
+    assert True
+  #+end_src
+
+Then lets re-run pytest
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -v
+#+end_src
+
+Now, we are able to run all the tests within a short amount of time. However, this is not the case always. Indeed, most of the time full test run of a test harnesses takes hours, even days. Therefore, as a developer, it will be improtant for you to run the test only related with the module that you make your development. For this purpose, we can use markers from ~pytest~. See below example
+
+
+- body
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/body/test_body.py
+from pytest import mark
+
+
+@mark.body
+def test_body_functions_as_expected():
+    assert True
+
+
+@mark.smoke
+@mark.body
+def test_fundamental_body_functions_as_expected():
+    assert True
+  #+end_src
+- engine
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+from pytest import mark
+
+
+@mark.engine
+def test_engine_functions_as_expected():
+    assert True
+
+
+@mark.smoke
+@mark.engine
+def test_fundamental_engine_functions_as_expected():
+    assert True
+  #+end_src
+- entertainment
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/entertainment/test_entertainment.py
+from pytest import mark
+
+
+@mark.entertainment
+def test_entertainment_functions_as_expected():
+    assert True
+  #+end_src
+
+Then lets re-run pytest
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -v
+#+end_src
+
+
+Then lets re-run pytest only for =engine= mark
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m engine -v
+#+end_src
+
+Notice that this will also generate a warning as given below:
+#+begin_example
+...
+tests/sportscar/engine/test_engine.py:6: PytestUnknownMarkWarning: Unknown pytest.mark.engine - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @mark.engine
+...
+#+end_example
+
+This is caused since we haven't register this marker explicitly. To avoid this warning, lets add following lines to =pytest.ini= file (see [[https://docs.pytest.org/en/stable/how-to/mark.html][details]]). When you re-run ~pytest -m engine -v~, you will notice that warning is disappeared.
+#+name: pytest-ini-with-markers
+#+begin_src toml :tangle ~/venvs/frameworkenv/pytest.ini
+markers =
+    engine: marks tests related with engine (select with '-m "engine"')
+    body: marks tests related with body (select with '-m "body"')
+    entertainment: marks tests related with entertainment (select with '-m "entertainment"')
+    smoke: marks tests related with fundamental funcitonalities (select with '-m "smoke"')
+#+end_src
+
+
+I believe you also notice that body and engine tests are marked with smoke, so that we can run all the smoke test via ~pytest -m smoke~ . Even further, we can just run the smoke test only related with engine
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine and smoke" -v
+#+end_src
+
+- *OR*
+  - ~pytest -m "not entertainment" -v~, run all the tests other than the entertainment suite
+  - ~pytest -m "engine or smoke" -v~, run all the tests either related with engine or smoke suite
+  - ~pytest -m "smoke and not body" -v~, run all the tests both related with smoke suite, but not inside body suite
+  - ~pytest -m "not engine or smoke" -v~, un all the tests either not inside engine suite or within smoke suite.
+
+As you can see, with the markers we are able to generate ou own custom suites just with simple parameters. So, pytest provides us simple and self maintaining system for suites. If you want to remove one of the test from smoke suite you can just remove the marker.
+
+However, it has started to be hard to mark every single function with a marker. To overcome this, we can just mark the class and put the tests inside it. Lets do it with creating a new suite called battery suite.
+
+Add following line to ~pytest.ini~ file
+#+begin_src toml :tangle ~/venvs/frameworkenv/pytest.ini
+    battery: marks tests related with battery (select with '-m "battery"')
+#+end_src
+
+and create following test class
+#+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/battery/test_battery.py
+from pytest import mark
+
+
+@mark.battery
+class BatteryTests:
+    @mark.smoke
+    def test_fundamental_battery_functions_as_expected(self):
+        assert True
+
+
+    def test_battery_functions_as_expected(self):
+        assert True
+
+#+end_src
+
+Now, lets test our new suite
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "battery or smoke" -v
+#+end_src
+
+One final point is that, to list all the markers use ~pytest --markers~ (see ~pytest -h~ for further details)
+
+** Save Time and Code with Test Fixtures
+** Basics of Reporting Test Results and Tracking Test History
+** Customizing Test Runs with the Command Line and Configuration Files
+** Handling Skips and Expected Failures
+** Cross-Browser and Data-driven testing with parametrize
+** Fast Testing with Pytest-xdist, and Parallel vs Concurrent
+** Writing Unit Tests (White Box Testing) with Tox
+** Writing Functional Tests (Black/Grey Box Testing)
