@@ -57,7 +57,7 @@ If you are facing another issue about management of python packges see more abou
 ** PyTest Introduction
 Test searching patterns of pytest is defined under =pytest.ini= file. The default patters are given below:
 #+name: sample-[[pytest]]-ini
-#+begin_src toml :tangle ~/venvs/frameworkenv/pytest.ini
+#+begin_src toml
 [pytest]
 python_files = test_*
 python_classes = *Tests
@@ -120,7 +120,7 @@ Now, we are able to run all the tests within a short amount of time. However, th
 
 
 - body
-  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/body/test_body.py
+  #+begin_src python
 from pytest import mark
 
 
@@ -135,7 +135,7 @@ def test_fundamental_body_functions_as_expected():
     assert True
   #+end_src
 - engine
-  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+  #+begin_src python
 from pytest import mark
 
 
@@ -150,7 +150,7 @@ def test_fundamental_engine_functions_as_expected():
     assert True
   #+end_src
 - entertainment
-  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/entertainment/test_entertainment.py
+  #+begin_src python
 from pytest import mark
 
 
@@ -180,7 +180,7 @@ tests/sportscar/engine/test_engine.py:6: PytestUnknownMarkWarning: Unknown pytes
 
 This is caused since we haven't register this marker explicitly. To avoid this warning, lets add following lines to =pytest.ini= file (see [[https://docs.pytest.org/en/stable/how-to/mark.html][details]]). When you re-run ~pytest -m engine -v~, you will notice that warning is disappeared.
 #+name: pytest-ini-with-markers
-#+begin_src toml :tangle ~/venvs/frameworkenv/pytest.ini
+#+begin_src toml
 markers =
     engine: marks tests related with engine (select with '-m "engine"')
     body: marks tests related with body (select with '-m "body"')
@@ -205,12 +205,12 @@ As you can see, with the markers we are able to generate ou own custom suites ju
 However, it has started to be hard to mark every single function with a marker. To overcome this, we can just mark the class and put the tests inside it. Lets do it with creating a new suite called battery suite.
 
 Add following line to ~pytest.ini~ file
-#+begin_src toml :tangle ~/venvs/frameworkenv/pytest.ini
+#+begin_src toml
     battery: marks tests related with battery (select with '-m "battery"')
 #+end_src
 
 and create following test class
-#+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/battery/test_battery.py
+#+begin_src python
 from pytest import mark
 
 
@@ -234,6 +234,236 @@ pytest -m "battery or smoke" -v
 One final point is that, to list all the markers use ~pytest --markers~ (see ~pytest -h~ for further details)
 
 ** Save Time and Code with Test Fixtures
+
+Okay lets say that we need to read the serial number of a car from a certain file before each test, and ensure that it is in a certain format. A sample file is given below:
+#+begin_src text :tangle ~/venvs/frameworkenv/sample_file.txt
+Some text SerialNumber=123456789
+#+end_src
+
+To parse this, we can use ~re~ package. However, writing those statements for each test will create a significant amout of code duplication, and maintanance cost.
+#+begin_src python :results output
+import re
+
+with open('sample_file.txt', 'r') as file:
+    sample_string = file.read()
+
+# Define the regex pattern to match MAC addresses
+pattern = r"SerialNumber=[0-9]+"
+
+# Find all matches of the pattern in the string
+matches = re.findall(pattern, sample_string)
+
+# Extract MAC addresses from matches
+serial_number = [match.split('=')[1] for match in matches]
+print(serail_number[0])
+#+end_src
+
+To aviod this problem, we can use ~fixtures~, and ~fixtures~ are just a function used to avoid code duplicaitions. To make our fixture available to all the test cases, we should create it under =conftest.py=, which stands for /configure test/. So that, any fixture that we create in =conftest.py= becomes accessible anywhere inside that directory and any directory below it, any test case that is in that directory or any test case below it. Therefore, I will create =conftest.py= file under =tests= directory.
+
+#+begin_src python :tangle ~/venvs/frameworkenv/tests/conftest.py
+from pytest import fixture
+import re
+
+
+# function is the default scope
+@fixture(scope='module')
+def serial_number_from_file():
+    with open('sample_file.txt', 'r') as file:
+        sample_string = file.read()
+
+    # Define the regex pattern to match MAC addresses
+    pattern = r"SerialNumber=[0-9]+"
+
+    # Find all matches of the pattern in the string
+    matches = re.findall(pattern, sample_string)
+
+    # Extract MAC addresses from matches
+    serial_number = [match.split('=')[1] for match in matches]
+    return serial_number
+
+#+end_src
+
+Here is a one important point to be aware of return value of fixtures have scopes, and there are 3 different scope option:
+- ~function~: Returned object will be available through the functions scope and for multiple calls fixture will not be evaluated again. This also means that if I modify this value with the first usage inside the function, this change will be available in the remainin of function (Not much different from a variable).
+- ~module~: Returned object will be available through the file scope and for multiple calls fixture will not be evaluated again throughout the test file. This also means that if I modify this value in first body test, this change will be available to body tests coming after it.
+- ~session~: Returned object will be available through the test run and for multiple calls fixture will not be evaluated again throughout the test session. This also means that if I modify this value in body test, this change will be available to tests run after it.
+
+Lets update file contents as below:
+- =pytest.ini=
+  #+begin_src toml :tangle ~/venvs/frameworkenv/pytest.ini
+[pytest]
+python_files = test_*
+python_classes = *Tests
+python_functions = test_*
+
+markers =
+    engine: marks tests related with engine (select with '-m "engine"')
+    body: marks tests related with body (select with '-m "body"')
+    entertainment: marks tests related with entertainment (select with '-m "entertainment"')
+    smoke: marks tests related with fundamental funcitonalities (select with '-m "smoke"')
+    battery: marks tests related with battery (select with '-m "battery"')
+  #+end_src
+- body
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/body/test_body.py
+from pytest import mark
+
+
+@mark.body
+def test_body_functions_as_expected():
+    assert True
+
+
+@mark.smoke
+@mark.body
+def test_fundamental_body_functions_as_expected(serial_number_from_file):
+    print()
+    serial_number = serial_number_from_file
+    print("initial value", serial_number)
+    serial_number.append("hello")
+    print("value after append", serial_number)
+    assert True
+  #+end_src
+- engine
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+from pytest import mark
+
+
+@mark.engine
+def test_engine_functions_as_expected():
+    assert True
+
+
+@mark.smoke
+@mark.engine
+def test_fundamental_engine_functions_as_expected(serial_number_from_file):
+    print()
+    serial_number = serial_number_from_file
+    print("initial value", serial_number)
+    serial_number.append("hello")
+    print("value after append", serial_number)
+    assert True
+  #+end_src
+- entertainment
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/entertainment/test_entertainment.py
+from pytest import mark
+
+
+@mark.entertainment
+def test_entertainment_functions_as_expected(serial_number_from_file):
+    print()
+    serial_number = serial_number_from_file
+    print("initial value", serial_number)
+    serial_number.append("hello")
+    print("value after append", serial_number)
+    assert True
+  #+end_src
+- battery
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/battery/test_battery.py
+from pytest import mark
+
+
+@mark.battery
+class BatteryTests:
+    @mark.smoke
+    def test_fundamental_battery_functions_as_expected(self, serial_number_from_file):
+        print()
+        serial_number = serial_number_from_file
+        print("initial value", serial_number)
+        serial_number.append("hello")
+        print("value after append", serial_number)
+        assert True
+
+    @mark.smoke
+    def test_other_fundamental_battery_functions_as_expected(self, serial_number_from_file):
+        print()
+        serial_number = serial_number_from_file
+        print("initial value", serial_number)
+        serial_number.append("hello")
+        print("value after append", serial_number)
+        assert True
+
+    def test_battery_functions_as_expected(self):
+        assert True
+  #+end_src
+
+Since the current scope is limitted to function calls. You will see that each function that is using the fixture will repeat following pattern:
+#+begin_example
+initial value ['123456789']
+value after append ['123456789', 'hello']
+#+end_example
+
+Lets run the tests, in this point *do not forget to add ~-s~ option to see the print logs*:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "smoke" -vs
+#+end_src
+
+To see the changes and differences for yourself, try different fixture scopes.
+
+
+There is still one final point about the fixtures, which can also help you to understand the fixture scopes better. First update fixture as given below, and re-run the tests
+
+#+begin_src python
+from pytest import fixture
+import re
+
+
+# function is the default scope
+@fixture(scope='module')
+def serial_number_from_file():
+    with open('sample_file.txt', 'r') as file:
+        sample_string = file.read()
+
+    # Define the regex pattern to match MAC addresses
+    pattern = r"SerialNumber=[0-9]+"
+
+    # Find all matches of the pattern in the string
+    matches = re.findall(pattern, sample_string)
+
+    # Extract MAC addresses from matches
+    serial_number = [match.split('=')[1] for match in matches]
+    print("\nFixture creted")
+    yield serial_number
+    print("\nFixture destroyed")
+#+end_src
+
+Sample output is given below:
+#+begin_example
+$ pytest -m "smoke" -vs
+...
+collected 8 items / 4 deselected / 4 selected
+
+tests/sportscar/battery/test_battery.py::BatteryTests::test_fundamental_battery_functions_as_expected
+Fixture creted
+
+initial value ['123456789']
+value after append ['123456789', 'hello']
+PASSED
+tests/sportscar/battery/test_battery.py::BatteryTests::test_other_fundamental_battery_functions_as_expected
+initial value ['123456789', 'hello']
+value after append ['123456789', 'hello', 'hello']
+PASSED
+Fixture destroyed
+
+tests/sportscar/body/test_body.py::test_fundamental_body_functions_as_expected
+Fixture creted
+
+initial value ['123456789']
+value after append ['123456789', 'hello']
+PASSED
+Fixture destroyed
+
+tests/sportscar/engine/test_engine.py::test_fundamental_engine_functions_as_expected
+Fixture creted
+
+initial value ['123456789']
+value after append ['123456789', 'hello']
+PASSED
+Fixture destroyed
+
+
+========================================== 4 passed, 4 deselected in 0.02s ==========================================
+#+end_example
+
 ** Basics of Reporting Test Results and Tracking Test History
 ** Customizing Test Runs with the Command Line and Configuration Files
 ** Handling Skips and Expected Failures
