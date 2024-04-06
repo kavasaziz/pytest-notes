@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="8" time="0.042" timestamp="2024-04-06T22:44:35.921469" hostname="CLAIRIZM1-00083"><testcase classname="tests.sportscar.battery.test_battery.BatteryTests" name="test_fundamental_battery_functions_as_expected" time="0.001" /><testcase classname="tests.sportscar.battery.test_battery.BatteryTests" name="test_other_fundamental_battery_functions_as_expected" time="0.000" /><testcase classname="tests.sportscar.battery.test_battery.BatteryTests" name="test_battery_functions_as_expected" time="0.000" /><testcase classname="tests.sportscar.body.test_body" name="test_body_functions_as_expected" time="0.000" /><testcase classname="tests.sportscar.body.test_body" name="test_fundamental_body_functions_as_expected" time="0.001"><failure message="assert False">serial_number_from_file = ['123456789', 'hello']
+
+    @mark.smoke
+    @mark.body
+    def test_fundamental_body_functions_as_expected(serial_number_from_file):
+        print()
+        serial_number = serial_number_from_file
+        print("initial value", serial_number)
+        serial_number.append("hello")
+        print("value after append", serial_number)
+&gt;       assert False
+E       assert False
+
+tests/sportscar/body/test_body.py:17: AssertionError</failure></testcase><testcase classname="tests.sportscar.engine.test_engine" name="test_engine_functions_as_expected" time="0.000" /><testcase classname="tests.sportscar.engine.test_engine" name="test_fundamental_engine_functions_as_expected" time="0.000" /><testcase classname="tests.sportscar.entertainment.test_entertainment" name="test_entertainment_functions_as_expected" time="0.000" /></testsuite></testsuites>

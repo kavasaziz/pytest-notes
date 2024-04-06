@@ -321,7 +321,7 @@ def test_fundamental_body_functions_as_expected(serial_number_from_file):
     print("initial value", serial_number)
     serial_number.append("hello")
     print("value after append", serial_number)
-    assert True
+    assert False
   #+end_src
 - engine
   #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
@@ -464,7 +464,33 @@ Fixture destroyed
 ========================================== 4 passed, 4 deselected in 0.02s ==========================================
 #+end_example
 
-** Basics of Reporting Test Results and Tracking Test History
+** Basics of Test Results Reporting and Tracking Test History
+One of the best way to represent the test results is to use html/xml.
+
+In that point, it is good to point out again that while organising your tests please use ~tests/<module>/<class>::<function>~ structure while organising your tests. So that, you will notice how descriptive test names can be.
+
+*** HTML
+To achieve such test output in pytest, one can use ~pytest-html~ library. To install it use ~python -m pip install pytest-html~, and to grasp the results you can run pytest as given below:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -v --html="results.html"
+#+end_src
+
+*Be careful that, if you use ~-s~ option to see the prints. Pytest will not be able to catch any test logs.*
+
+This can also be useful to add some customization on this report, such as
+- test suite/harness version, and current commit hash
+- exporting the test results in other test output formats
+- Format of html can be improved
+
+
+*** XML
+This output formating already comes with ~pytest~ by deafult. This is also one of the most commonly used test output formating, thanks to ~Junit~ framework. Lets run and see:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -v --junitxml="results.xml"
+#+end_src
+
+/The good side of xml output is that it can be used to keep track of test history in jenkins./
+
 ** Customizing Test Runs with the Command Line and Configuration Files
 ** Handling Skips and Expected Failures
 ** Cross-Browser and Data-driven testing with parametrize
