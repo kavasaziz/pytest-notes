@@ -260,7 +260,7 @@ print(serail_number[0])
 
 To aviod this problem, we can use ~fixtures~, and ~fixtures~ are just a function used to avoid code duplicaitions. To make our fixture available to all the test cases, we should create it under =conftest.py=, which stands for /configure test/. So that, any fixture that we create in =conftest.py= becomes accessible anywhere inside that directory and any directory below it, any test case that is in that directory or any test case below it. Therefore, I will create =conftest.py= file under =tests= directory.
 
-#+begin_src python :tangle ~/venvs/frameworkenv/tests/conftest.py
+#+begin_src python
 from pytest import fixture
 import re
 
@@ -321,10 +321,10 @@ def test_fundamental_body_functions_as_expected(serial_number_from_file):
     print("initial value", serial_number)
     serial_number.append("hello")
     print("value after append", serial_number)
-    assert False
+    assert True
   #+end_src
 - engine
-  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+  #+begin_src python
 from pytest import mark
 
 
@@ -492,6 +492,238 @@ pytest -v --junitxml="results.xml"
 /The good side of xml output is that it can be used to keep track of test history in jenkins./
 
 ** Customizing Test Runs with the Command Line and Configuration Files
+
+We already discussed about how we can customize our test using markers. For instance, to run all the fundamental functionality test related with diesel sports car, we can use sth like below:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "smoke and not battery" -v
+#+end_src
+
+However, as you could also notice, this is still not accurate enough because working mechanism of engine in electrical cars are much different from a diesel cars. To solve this, we can use marking ambigiously or we can use some fixtures. However, all those will add to much technical complexity over the usage of test suite. What we need is sth more like a recipe.
+
+Therefore, what we need is dynamically adopting config mechanism. Even though it is not a good practice, we can use a class and embed our config generation and config values inside of it. (*In real world, config values should be kept inside a specific config file like ~config.json~.*)
+
+#+begin_src python
+class Config:
+    SUPPORTED_ENGINE_TYPES = ["electrical", "diesel", "hybrit"]
+
+    def __init__(self, engine_type):
+        if engine_type.lower() not in self.SUPPORTED_ENGINE_TYPES:
+            raise ValueError(f"{engine_type} is not amoung supported engine types: {self.SUPPORTED_ENGINE_TYPES}")
+
+        self.engine = {
+            "electrical": "Electrical Engine",
+            "diesel": "Diesel Engine",
+            "hybrid": "Hybrid Engine",
+        }[engine_type]
+
+#+end_src
+
+In usual case, when we need to parse command line arguments, we use ~argparse~ package. However, ~pytest~ has on its own parsing system. Therefore, I will directly use it. However, note that this ~action~ argument and others still require the knowledge of [[https://docs.python.org/3/library/argparse.html][~argparse~ module]]. (see [[https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument][action list]])
+
+Finally, you can think ~parser~ as fixture provided via pytest itself in function given below:
+
+#+begin_src python
+def pytest_addoption(parser):
+    parser.addoption(
+        "--engine-type",
+        action="store",
+        # default="diesel",
+        # dest='engine_type',
+        help="Engine type for the vehicle under test"
+    )
+#+end_src
+
+Even better, now you can see your custom option in pytest help output.
+
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest --help | grep engine-type --context 5
+#+end_src
+
+See the example given below:
+#+begin_example
+                        additional metadata from a json string.
+  --metadata-from-json-file=METADATA_FROM_JSON_FILE
+                        additional metadata from a json file.
+
+Custom options:
+  --engine-type=ENGINE_TYPE
+                        Engine type for the vehicle under test
+
+[pytest] ini-options in the first pytest.ini|tox.ini|setup.cfg|pyproject.toml file found:
+
+  markers (linelist):   Markers for test functions
+#+end_example
+
+Lets add getter for this option:
+#+begin_src python
+
+@fixture(scope='session')
+def get_engine_type(request):
+    return request.config.getoption("--engine-type")
+#+end_src
+
+Since this will not change throughout the test run, there is no reason to parse it again. Another point is that ~request~ parameter. One can again think of it as fixture provided via pytest.
+
+Now update engine test, and see the results:
+#+begin_src python
+from pytest import mark
+
+
+@mark.engine
+def test_engine_functions_as_expected():
+    assert True
+
+
+@mark.smoke
+@mark.engine
+def test_fundamental_engine_functions_as_expected(serial_number_from_file, get_engine_type):
+    print()
+    engine_type = get_engine_type.lower()
+    print(f"Engine type is {engine_type}")
+    serial_number = serial_number_from_file
+    print("initial value", serial_number)
+    if ("electrical" == engine_type):
+        serial_number.append("hello")
+        print("value after append", serial_number)
+
+    assert True
+#+end_src
+
+Then lets re-run pytest, and see the effect of =Electrical= engine over test run
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "smoke and engine" --engine-type=diesel -vs
+#+end_src
+
+Test output
+#+begin_example
+...
+tests/sportscar/engine/test_engine.py::test_fundamental_engine_functions_as_expected
+Engine type is diesel
+initial value ['123456789']
+PASSED
+...
+#+end_example
+
+A better approach here would be to create an appropriate engine instance, and pass it to ~test_fundamental_engine_functions_as_expected~ test. It is not a good practice to variate the test content depending on certain parameters, and embedding instance specific test logic inside the test. In other words, we should not keep the logic that does not belong the test into test functions.
+
+Therefore, first lets update our config class to include our engine logic
+#+begin_src python :tangle ~/venvs/frameworkenv/tests/config.py
+class Engine:
+    SUPPORTED_ENGINE_TYPES = ["electrical", "diesel", "hybrid"]
+
+
+    def __init__(self, engine_type):
+        if engine_type is None:
+            raise ValueError("engine_type can't be None")
+
+        self.engine_type = engine_type.lower()
+
+        if self.engine_type not in self.SUPPORTED_ENGINE_TYPES:
+            raise ValueError(f"{engine_type} is not amoung supported engine types: {self.SUPPORTED_ENGINE_TYPES}")
+
+        self.engine = {
+            "electrical": "Electrical Engine",
+            "diesel": "Diesel Engine",
+            "hybrid": "Hybrid Engine",
+        }[self.engine_type]
+
+
+
+    def engine_run_fundamental_functions(self, serial_numbers):
+        print(f"Engine type is {self.engine_type}")
+        print("initial value", serial_numbers)
+        if ("electrical" == self.engine_type):
+            serial_numbers.append("hello")
+            print("value after append", serial_numbers)
+
+        return True
+
+#+end_src
+
+Then, lets add new fixture to manage global engine object. By the way, yes fixtures can use other fixtures, and you can use this to generate engine instance.
+#+begin_src python :tangle ~/venvs/frameworkenv/tests/conftest.py
+import re
+from pytest import fixture
+
+from config import Engine
+
+
+# function is the default scope
+@fixture(scope='module')
+def serial_number_from_file():
+    with open('sample_file.txt', 'r') as file:
+        sample_string = file.read()
+
+    # Define the regex pattern to match MAC addresses
+    pattern = r"SerialNumber=[0-9]+"
+
+    # Find all matches of the pattern in the string
+    matches = re.findall(pattern, sample_string)
+
+    # Extract MAC addresses from matches
+    serial_number = [match.split('=')[1] for match in matches]
+    return serial_number
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--engine-type",
+        action="store",
+        # default="diesel", # not suggested for real-life practices
+        # dest='engine_type',
+        help="Engine type for the vehicle under test"
+    )
+
+
+@fixture(scope='session')
+def get_engine_type(request):
+    return request.config.getoption("--engine-type")
+
+
+@fixture(scope='session')
+def get_engine(get_engine_type):
+    engine = Engine(get_engine_type)
+    print(f"\n{engine.engine} created")
+    yield engine
+    print(f"\n{engine.engine} destroyed")
+#+end_src
+
+Now, lets update our test function
+#+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+from pytest import mark
+
+
+@mark.engine
+def test_engine_functions_as_expected():
+    assert True
+
+
+@mark.smoke
+@mark.engine
+def test_fundamental_engine_functions_as_expected(serial_number_from_file, get_engine):
+    assert True == get_engine.engine_run_fundamental_functions(serial_number_from_file)
+#+end_src
+
+Lets run and ensure that our changes are working:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "smoke and engine" --engine-type=electrical -vs
+# pytest -m "smoke and engine" --engine-type=diesel -vs
+#+end_src
+
+Here is the result of test run:
+#+begin_example
+...
+tests/sportscar/engine/test_engine.py::test_fundamental_engine_functions_as_expected
+Electrical Engine created
+Engine type is electrical
+initial value ['123456789']
+value after append ['123456789', 'hello']
+PASSED
+Electrical Engine destroyed
+...
+#+end_example
+
+
 ** Handling Skips and Expected Failures
 ** Cross-Browser and Data-driven testing with parametrize
 ** Fast Testing with Pytest-xdist, and Parallel vs Concurrent

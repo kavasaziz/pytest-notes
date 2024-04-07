@@ -8,10 +8,5 @@ def test_engine_functions_as_expected():
 
 @mark.smoke
 @mark.engine
-def test_fundamental_engine_functions_as_expected(serial_number_from_file):
-    print()
-    serial_number = serial_number_from_file
-    print("initial value", serial_number)
-    serial_number.append("hello")
-    print("value after append", serial_number)
-    assert True
+def test_fundamental_engine_functions_as_expected(serial_number_from_file, get_engine):
+    assert True == get_engine.engine_run_fundamental_functions(serial_number_from_file)
