@@ -725,6 +725,111 @@ Electrical Engine destroyed
 
 
 ** Handling Skips and Expected Failures
+
+In a real-life scenario, it is expected to have failing test and skipped test. To deal with those, ~pytest~ provide us some special marks, like ~skip~ and ~xfail~. (see [[https://docs.pytest.org/en/latest/skipping.html][details]])
+
+There are various approach for skipping or failing a test. However, it is better to remove the tests that will not expected to fixed in a sort term because your production suite should only have thing that working and bring valuable information. Why?
+- failing and skipped test does not bring any value to anyone
+- as the number of skip and fails increased amount of time for you to explain other why this does not pass increases
+- as the fail keep existing, confidence to the result of test suite, and thus, the usage of test suite decrases.
+
+Therefore, if you have test the which you don't expect to pass in short term, move it to some other branch. One other bad habit is to commenting the failing test, and this is a really bad practice because then you will never see the fail and you will never know it is existing. However, there will be a lot of stuffs that will be never tested. In other words, you are giving bad and wrong information to users.
+
+However, if you are going to fix the fails within a short amount of time (at most within 2 sprints). It is okay to skip them.
+
+Now, how we can do it? Lets say our test cases for testing the type of engine:
+#+begin_src python
+@mark.engine
+def test_engine_type_diesel(get_engine_type):
+    assert "diesel" == get_engine_type
+
+
+@mark.engine
+def test_engine_type_electrical(get_engine_type):
+    assert "electrical" == get_engine_type
+#+end_src
+
+It is obvious that they will fail when we pass engine type as hybrid.
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine" --engine-type=hybrid -v
+#+end_src
+
+In order not to fail in those tests, lets sign them with skip. Thus, test run of the test suite will not fail any longer. Besides, it is also a good practice add notes about skip reason.
+#+begin_src python
+@mark.skip(reason="Broken after release train #")
+@mark.engine
+def test_engine_type_diesel(get_engine_type):
+    assert "diesel" == get_engine_type
+
+
+@mark.skip(reason="Not a compatible test case")
+@mark.engine
+def test_engine_type_electrical(get_engine_type):
+    assert "electrical" == get_engine_type
+#+end_src
+
+To see the skip reason of the tests, add ~-rs~ flags together to the end of ~pytest~ command, as shown below:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine" --engine-type=hybrid -v -rxs
+#+end_src
+
+Note that ~s~ inside the ~-rs~ command is not the one used to the print options. If you wish to see your prints inside the code please also add another ~-s~ option, as shown below:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine" --engine-type=hybrid -v -rxs -s
+#+end_src
+
+As mentioned previously, it is also possible to use ~xfail~ for failing test cases, as shown below:
+#+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+@mark.xfail(reason="Broken after release train #")
+@mark.engine
+def test_engine_type_diesel(get_engine_type):
+    print("\nxfail test is executed")
+    assert "diesel" == get_engine_type
+
+
+@mark.skip(reason="Not a compatible test case")
+@mark.engine
+def test_engine_type_electrical(get_engine_type):
+    print("\nskip test is not executed")
+    assert "electrical" == get_engine_type
+#+end_src
+
+Just like in the ~skip~ case to see the fail reason of ~xfail~ tests, you need to add ~-rx~. In ~pytest~ docs, it is explained as below:
+#+begin_src shell
+pytest -rxXs  # show extra info on xfailed, xpassed, and skipped tests
+#+end_src
+
+Namely,
+- ~-r~: show extra info
+- ~-x~: on ~xfail~
+- ~-X~: on ~xpass~
+- ~-s~: on ~skip~
+
+There is a lot about those markers, but for the sake of simplicity, difference between ~xfail~ and ~skip~ can be summarized as below:
+- ~skip~: does not run the test if the condition is meet
+- ~xfail~: does run the test and expects test to fail, and if it fails, it will give us xfail report if the contion above is meet. Otherwise it makes the test run fail. (Note: I know that ~xfail~ has argument for not to run the test, but this is not our subject for now)
+
+The mentioned diffrence can also be seen via following command:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine" --engine-type=hybrid -v -rxs -s
+#+end_src
+
+Inside the output of above command, one should expect to see only the ="xfail test is executed"= statement, and not the one inside skipped tests.
+
+Different from the ~skip~, there are some possible usa cases for ~xfail~, and one of them is testing the negative test cases.
+
+It is common to test failing test cases so that we can make sure that case expected to be fail is failing. For instance, you have a deprecated feature in your app, and thus you expect it not to be supported. Therefore, you can expect to have failing test for such a case. Lets add a sample test for it:
+#+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+@mark.xfail(reason="This future should be deprecated after release trian #")
+@mark.engine
+def test_engine_deprecated_future(get_engine_type):
+    assert False
+#+end_src
+
+/Finally, as we have discussed previously, it is not a good practice to leave failing tests aroud for a long time. In our currect case, they are only used for demo purposes. Therefore, I will leave them as they are for the future commits./
+
+We would also like to point out that we have given a brief introduction to how these signs can be used. We will explore more detailed use cases in the future.
+
 ** Cross-Browser and Data-driven testing with parametrize
 ** Fast Testing with Pytest-xdist, and Parallel vs Concurrent
 ** Writing Unit Tests (White Box Testing) with Tox
