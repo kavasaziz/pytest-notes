@@ -1,6 +1,9 @@
 import re
+import json
+
 from pytest import fixture
 
+from config import Body
 from config import Engine
 
 
@@ -21,24 +24,65 @@ def serial_number_from_file():
     return serial_number
 
 
+# Add parsers for cli arguments
 def pytest_addoption(parser):
     parser.addoption(
         "--engine-type",
         action="store",
-        # default="diesel", # not suggested for real-life practices
+        default="diesel", # not suggested for real-life practices
         # dest='engine_type',
         help="Engine type for the vehicle under test"
     )
+    parser.addoption(
+        "--config",
+        action="store",
+        default="config.json", # not suggested
+        help="Path of config file"
+    )
 
 
+# cli argument return options
 @fixture(scope='session')
 def get_engine_type(request):
     return request.config.getoption("--engine-type")
 
 
 @fixture(scope='session')
+def get_config_path(request):
+    return request.config.getoption("--config")
+
+
+TEST_DATA_PATH = "test_data/test_data.json"
+
+
+def load_test_data(path=TEST_DATA_PATH):
+    with open(path) as test_data_file:
+        return json.load(test_data_file)
+
+
+# Test instances used throughout the test execution
+@fixture(scope='session')
 def get_engine(get_engine_type):
     engine = Engine(get_engine_type)
     print(f"\n{engine.engine} created")
     yield engine
     print(f"\n{engine.engine} destroyed")
+
+
+@fixture(scope="session")
+def get_config(get_config_path):
+    with open(get_config_path) as config_file:
+        yield json.load(config_file)
+
+
+@fixture(scope="session", params=load_test_data()["body_types"])
+def get_body_list(request):
+    body_type = request.param
+    yield body_type
+
+
+@fixture(scope="module")
+def get_body(get_body_list, get_config):
+    body_type = get_body_list
+    body_instance = Body(body_type, get_config["supported_engines"])
+    yield body_instance

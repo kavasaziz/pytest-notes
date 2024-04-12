@@ -304,7 +304,7 @@ markers =
     battery: marks tests related with battery (select with '-m "battery"')
   #+end_src
 - body
-  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/body/test_body.py
+  #+begin_src python
 from pytest import mark
 
 
@@ -607,7 +607,7 @@ PASSED
 A better approach here would be to create an appropriate engine instance, and pass it to ~test_fundamental_engine_functions_as_expected~ test. It is not a good practice to variate the test content depending on certain parameters, and embedding instance specific test logic inside the test. In other words, we should not keep the logic that does not belong the test into test functions.
 
 Therefore, first lets update our config class to include our engine logic
-#+begin_src python :tangle ~/venvs/frameworkenv/tests/config.py
+#+begin_src python
 class Engine:
     SUPPORTED_ENGINE_TYPES = ["electrical", "diesel", "hybrid"]
 
@@ -641,7 +641,7 @@ class Engine:
 #+end_src
 
 Then, lets add new fixture to manage global engine object. By the way, yes fixtures can use other fixtures, and you can use this to generate engine instance.
-#+begin_src python :tangle ~/venvs/frameworkenv/tests/conftest.py
+#+begin_src python
 import re
 from pytest import fixture
 
@@ -689,7 +689,7 @@ def get_engine(get_engine_type):
 #+end_src
 
 Now, lets update our test function
-#+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+#+begin_src python
 from pytest import mark
 
 
@@ -779,7 +779,7 @@ pytest -m "engine" --engine-type=hybrid -v -rxs -s
 #+end_src
 
 As mentioned previously, it is also possible to use ~xfail~ for failing test cases, as shown below:
-#+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+#+begin_src python
 @mark.xfail(reason="Broken after release train #")
 @mark.engine
 def test_engine_type_diesel(get_engine_type):
@@ -819,7 +819,7 @@ Inside the output of above command, one should expect to see only the ="xfail te
 Different from the ~skip~, there are some possible usa cases for ~xfail~, and one of them is testing the negative test cases.
 
 It is common to test failing test cases so that we can make sure that case expected to be fail is failing. For instance, you have a deprecated feature in your app, and thus you expect it not to be supported. Therefore, you can expect to have failing test for such a case. Lets add a sample test for it:
-#+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+#+begin_src python
 @mark.xfail(reason="This future should be deprecated after release trian #")
 @mark.engine
 def test_engine_deprecated_future(get_engine_type):
@@ -831,6 +831,590 @@ def test_engine_deprecated_future(get_engine_type):
 We would also like to point out that we have given a brief introduction to how these signs can be used. We will explore more detailed use cases in the future.
 
 ** Cross-Browser and Data-driven testing with parametrize
+
+First of all, lets uncomment ~default~ option for parser, as shown below:
+#+begin_src python
+def pytest_addoption(parser):
+    parser.addoption(
+        "--engine-type",
+        action="store",
+        default="diesel", # not suggested for real-life practices
+        # dest='engine_type',
+        help="Engine type for the vehicle under test"
+    )
+#+end_src
+
+/Please notice that not using ~--engine-type~ flag will not make our test runs fail as of this point./
+
+I know this is not a good practice, but I don't want to add extra cummulative complexities over our test runs. Besides, it is not related with the subject that we will mention any longer. Therefore, it is okay to leave it as default for now. Therefore, the final version of the lastly updated files will be as given below:
+- =conftest.py=
+  #+begin_src python
+import re
+from pytest import fixture
+
+from config import Engine
+
+
+# function is the default scope
+@fixture(scope='module')
+def serial_number_from_file():
+    with open('sample_file.txt', 'r') as file:
+        sample_string = file.read()
+
+    # Define the regex pattern to match MAC addresses
+    pattern = r"SerialNumber=[0-9]+"
+
+    # Find all matches of the pattern in the string
+    matches = re.findall(pattern, sample_string)
+
+    # Extract MAC addresses from matches
+    serial_number = [match.split('=')[1] for match in matches]
+    return serial_number
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--engine-type",
+        action="store",
+        default="diesel", # not suggested for real-life practices
+        # dest='engine_type',
+        help="Engine type for the vehicle under test"
+    )
+
+
+@fixture(scope='session')
+def get_engine_type(request):
+    return request.config.getoption("--engine-type")
+
+
+@fixture(scope='session')
+def get_engine(get_engine_type):
+    engine = Engine(get_engine_type)
+    print(f"\n{engine.engine} created")
+    yield engine
+    print(f"\n{engine.engine} destroyed")
+  #+end_src
+
+- =test_engine.py=
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/engine/test_engine.py
+from pytest import mark
+
+
+@mark.engine
+def test_engine_functions_as_expected():
+    assert True
+
+
+@mark.smoke
+@mark.engine
+def test_fundamental_engine_functions_as_expected(serial_number_from_file, get_engine):
+    assert True == get_engine.engine_run_fundamental_functions(serial_number_from_file)
+
+
+@mark.xfail(reason="Broken after release train #")
+@mark.engine
+def test_engine_type_diesel(get_engine_type):
+    print("\nxfail test is executed")
+    assert "diesel" == get_engine_type
+
+
+@mark.skip(reason="Not a compatible test case")
+@mark.engine
+def test_engine_type_electrical(get_engine_type):
+    print("\nskip test is not executed")
+    assert "electrical" == get_engine_type
+
+
+@mark.xfail(reason="This future should be deprecated after release trian #")
+@mark.engine
+def test_engine_deprecated_future(get_engine_type):
+    assert False
+  #+end_src
+
+Parametrization is one of the most important point to have modular and scalable test suite. Basically, one can think parametrization as running the same test with different inputs and program states without code duplication. Even though there are more than 20 different ways have parametrized tests, we will discuss about 3 effective and beginner friendly ways to have parametrized tests in our test suite. (see [[https://docs.pytest.org/en/7.0.x/example/parametrize.html#paramexamples][docs1]], [[https://docs.pytest.org/en/7.0.x/how-to/parametrize.html#parametrize-basics][docs2]])
+
+*** On-the-fly parametrization /(NOT RECOMMENDED)/
+Parametrization in ~pytest~ is also handled via ~mark~ decorator. Let's say, we need our body to appropriate for every type of engine. Therefore, produced device body needs to tested for every single engine type. Further, there are multiple types of structure for car body. Besides, since such a test would be a fundamental requirment for both body and engine, it needs to be added in to both smoke, body and engine suites.
+
+#+begin_src python
+@mark.smoke
+@mark.body
+@mark.engine
+@mark.parametrize(
+    "body_type", [("coupes"), ("cabriolets")]
+)
+def test_body_type_compatible_with_engine(body_type, get_engine_type):
+    print(f"\n{body_type} is compatible with engine {get_engine_type}")
+    assert True
+#+end_src
+
+
+Lets run and see the output:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine and smoke and body" -v -rxs -s
+# pytest -m "engine and smoke and body" --engine-type=hybrid -v -rxs -s
+#+end_src
+
+In this point, note that the value of parametirazed arguments need to be list of tuples, because we can have more than one input arguments. For instance, we can give set input states for the test:
+#+begin_src python
+@mark.smoke
+@mark.body
+@mark.engine
+@mark.parametrize(
+    "body_type, engine_type, expected", [
+        ("coupes", "electrical", True),
+        ("cabriolets", "electrical", True),
+        ("coupes", "hybrid", False),
+        ("cabriolets", "hybrid", True),
+        ("coupes", "diesel", True),
+        ("cabriolets", "diesel", True),
+    ]
+)
+def test_body_engine_compatibility(body_type, engine_type, expected):
+    print(f"\n{body_type} is compatible with engine {engine_type}")
+    if body_type == "coupes" and engine_type == "hybrid":
+        assert False == expected
+    else:
+        assert True == expected
+
+#+end_src
+
+Now, lets run and see how the parametrization of multiple variables will work.
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine and smoke and body" -v -rxs -s
+#+end_src
+
+Note that, in above example we tested the device for some fake engine type with hardcoded parameter. Further, when we are trying to avoid from code duplication, we have ended up with a lot of manually written test states. Even though it is practical to have such parametrization for not easily producible test states, it was not necessary in our example. I will refoctor this approach, but before that lets first look at how we could decrase that repaated input states. Since, even if we decouple ~expected~ parameter from the test parametrization, we still have to list each ~engine_type~ for each ~body_type~.
+
+To solve it, one can just add a new ~@mark.parametrize~ for other variable seperately.
+#+begin_src python
+@mark.smoke
+@mark.body
+@mark.engine
+@mark.parametrize(
+    "body_type", [
+        ("coupes"),
+        ("cabriolets"),
+    ]
+)
+@mark.parametrize(
+    "engine_type", [
+        ("electrical"),
+        ("hybrid"),
+        ("diesel"),
+    ]
+)
+def test_body_engine_compatibility(body_type, engine_type):
+    print(f"\n{body_type} is compatible with engine {engine_type}")
+    assert True
+
+#+end_src
+
+Now, lets run and see that number of executed tests will not change.
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine and smoke and body" -v -rxs -s
+#+end_src
+
+However, all those are still coupling the input data with indvidual test case. In other words, this will make our test suite hard to scale, maintaince and refactor. For instance, if it is needed to add new body type, we need add it to every single place where we have made this parametrization.
+
+*** Indirect parametrization with fixtures
+To solve this issue, we can apply parametization over fixtures, so that we can have parametrized input management over single point. Lets add a fixture called ~get_body_type~,
+
+#+begin_src python
+from config import Body
+
+
+@fixture(scope="session", params=["coupes", "cabriolets"])
+def get_body_list(request):
+    body_type = request.param
+    yield body_type
+
+
+@fixture(scope="module")
+def get_body(get_body_list):
+    body_type = get_body_list
+    body_instance = Body(body_type)
+    yield body_instance
+#+end_src
+
+So, any test that uses this fixture will be executed for each element inside =params= list. Now, we have a mothod to generate body types; however, this still does not allow us to decouple the test logic from the existing structure:
+
+#+begin_src python
+class Body:
+    SUPPORTED_BODY_TYPES = ["coupes", "cabriolets"]
+
+
+    def __init__(self, body_type):
+        if body_type is None:
+            raise ValueError("body_type can't be None")
+
+        self.body_type = body_type.lower()
+
+        if self.body_type not in self.SUPPORTED_BODY_TYPES:
+            raise ValueError(f"{body_type} is not amoung supported body types: {self.SUPPORTED_BODY_TYPES}")
+
+        self.body = {
+            "coupes": "coupes body",
+            "cabriolets": "cabriolets body",
+        }[self.body_type]
+
+        self.supported_engines = {
+            "coupes": ["electrical", "diesel"],
+            "cabriolets": ["electrical", "diesel", "hybrid"],
+        }[self.body_type]
+
+
+    def is_engine_compatible(self, engine):
+        if engine.engine_type in self.supported_engines:
+            return True
+        return False
+#+end_src
+
+Since we have updated our structure, now we can rewrite our test.
+#+begin_src python
+@mark.smoke
+@mark.body
+@mark.engine
+def test_body_engine_compatibility(get_body, get_engine):
+    is_compatible = get_body.is_engine_compatible(get_engine)
+    if is_compatible:
+        print(f"\n{get_body.body_type} is compatible with engine {get_engine.engine_type}")
+    else:
+        print(f"\n{get_body.body_type} is not compatible with engine {get_engine.engine_type}")
+
+    assert is_compatible
+
+#+end_src
+
+Now, lets run and see our test results:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine and smoke and body" -v -rxs -s
+#+end_src
+
+As you also observed, since the default type of engine was ~diesel~ our tests has passed. However, if we would run the tests with ~--engine-type=hybrid~ flag, the test will fail for ~coupes~ body type bacause it is not among the one of supported engine types for ~coupes~.
+
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine and smoke and body" --engine-type=hybrid -v -rxs -s
+#+end_src
+
+#+begin_quote
+ In this point, if the ~hybrid~ engine is not supported on purpose, it will be a good practice to sign this test case with ~xfail~. Thus, the nagative test case will be tested.
+#+end_quote
+
+By refactoring the test below we can handle expected fail
+#+begin_src python
+from pytest import xfail
+
+
+@mark.smoke
+@mark.body
+@mark.engine
+def test_body_engine_compatibility(get_body, get_engine):
+    is_compatible = get_body.is_engine_compatible(get_engine)
+    if is_compatible:
+        print(f"\n{get_body.body_type} is compatible with engine {get_engine.engine_type}")
+    else:
+        print(f"\n{get_body.body_type} is not compatible with engine {get_engine.engine_type}")
+
+    if not is_compatible and get_body.body_type == 'coupes' and get_engine.engine_type == 'hybrid':
+        xfail(reason=f"{get_engine.engine_type} engine is not supported for {get_body.body_type}")
+    assert is_compatible
+
+#+end_src
+
+Now, lets run and see the result for our ~xfail~.
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine and smoke and body" --engine-type=hybrid -v -rxs -s
+#+end_src
+
+This solution is satisfactory for the current test scenario. However, for handling compatibility information across multiple test cases, it is recommended to either transform this compatibility test into a fixture or establish a dependency tree within test modules. Alternatively, a combination of both approaches can be utilized for enhanced management of compatibility data. Since, those are out of our subject, they will revisited in the future.
+
+*** Data-Driven Parametrization
+
+Until now, we have achieved to decouple our tests from the test data and test logic. However, there is still some room to improve. Currently, our test data resides within the test suite, which could become unwieldy with large datasets. Therefore, a more structured approach involves managing test data via dedicated data files, such as JSON or YAML. To illustrate, we'll utilize a files named =config.json= and =test_data/test_data.json= in this part.
+
+Test data is unique for specifci use case, and thus, there will be multiple of them. Therefore, unlike the config file, it is not intiutive to read it once and keep it into memory throughout the session because same test data will not be used multiple times.
+
+Until now, we have used test data for test parametrization. Therefore, ~body_type~ can be put inside test data file.
+#+begin_src json :tangle ~/venvs/frameworkenv/test_data/test_data.json
+{
+    "body_types": ["coupes", "cabriolets"]
+}
+#+end_src
+
+As for config file, it should include general information about test execution and test modules. For instance, ~supported_engines~ can be used for this purpose.
+#+begin_src json :tangle ~/venvs/frameworkenv/config.json
+{
+    "supported_engines": {
+        "coupes": ["electrical", "diesel"],
+        "cabriolets": ["electrical", "diesel", "hybrid"]
+    }
+}
+#+end_src
+
+To utilize test data and config file, we need to update parsing  mechnism used for them.
+#+begin_src python
+import json
+
+from config import Body
+
+
+CONFIG_PATH="config.json"
+
+
+@fixture(scope="session")
+def get_config(path=CONFIG_PATH):
+    with open(path) as config_file:
+        yield json.load(config_file)
+
+
+TEST_DATA_PATH="test_data/test_data.json"
+
+
+def load_test_data(path=TEST_DATA_PATH):
+    with open(path) as test_data_file:
+        return json.load(test_data_file)
+
+
+@fixture(scope="session", params=load_test_data()["body_types"])
+def get_body_list(request):
+    body_type = request.param
+    yield body_type
+
+
+@fixture(scope="session")
+def get_body(get_body_list, get_config):
+    body_type = get_body_list
+    body_instance = Body(body_type, get_config["supported_engines"])
+    yield body_instance
+#+end_src
+
+Finally, it is also necessary to update =config.py= because it still does not use supported engine types provided via =config.json=.
+#+begin_src python
+class Body:
+    SUPPORTED_BODY_TYPES = ["coupes", "cabriolets"]
+
+
+    def __init__(self, body_type, supported_engines):
+        if body_type is None:
+            raise ValueError("body_type can't be None")
+
+        self.body_type = body_type.lower()
+
+        if self.body_type not in self.SUPPORTED_BODY_TYPES:
+            raise ValueError(f"{body_type} is not amoung supported body types: {self.SUPPORTED_BODY_TYPES}")
+
+        self.body = {
+            "coupes": "coupes body",
+            "cabriolets": "cabriolets body",
+        }[self.body_type]
+
+        self.supported_engines = supported_engines[self.body_type]
+
+
+    def is_engine_compatible(self, engine):
+        if engine.engine_type in self.supported_engines:
+            return True
+        return False
+#+end_src
+
+Now, lets run and make sure that we are able to fetch required information properly from config and test data file.
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "engine and smoke and body" --engine-type=hybrid -v -rxs -s
+#+end_src
+
+In this point, note that turning the path of =config.json= and =test_data/test_data.json= into a command line argument would be a better practice. For now, I will update cli arguments for =config.json=, but for test data this is rather complicated and beyond our knowledge for now. Therefore, I will leave it as future work. Together with this change, the final version of updated files are given below:
+
+- =conftest.py=
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/conftest.py
+import re
+import json
+
+from pytest import fixture
+
+from config import Body
+from config import Engine
+
+
+# function is the default scope
+@fixture(scope='module')
+def serial_number_from_file():
+    with open('sample_file.txt', 'r') as file:
+        sample_string = file.read()
+
+    # Define the regex pattern to match MAC addresses
+    pattern = r"SerialNumber=[0-9]+"
+
+    # Find all matches of the pattern in the string
+    matches = re.findall(pattern, sample_string)
+
+    # Extract MAC addresses from matches
+    serial_number = [match.split('=')[1] for match in matches]
+    return serial_number
+
+
+# Add parsers for cli arguments
+def pytest_addoption(parser):
+    parser.addoption(
+        "--engine-type",
+        action="store",
+        default="diesel", # not suggested for real-life practices
+        # dest='engine_type',
+        help="Engine type for the vehicle under test"
+    )
+    parser.addoption(
+        "--config",
+        action="store",
+        default="config.json", # not suggested
+        help="Path of config file"
+    )
+
+
+# cli argument return options
+@fixture(scope='session')
+def get_engine_type(request):
+    return request.config.getoption("--engine-type")
+
+
+@fixture(scope='session')
+def get_config_path(request):
+    return request.config.getoption("--config")
+
+
+TEST_DATA_PATH = "test_data/test_data.json"
+
+
+def load_test_data(path=TEST_DATA_PATH):
+    with open(path) as test_data_file:
+        return json.load(test_data_file)
+
+
+# Test instances used throughout the test execution
+@fixture(scope='session')
+def get_engine(get_engine_type):
+    engine = Engine(get_engine_type)
+    print(f"\n{engine.engine} created")
+    yield engine
+    print(f"\n{engine.engine} destroyed")
+
+
+@fixture(scope="session")
+def get_config(get_config_path):
+    with open(get_config_path) as config_file:
+        yield json.load(config_file)
+
+
+@fixture(scope="session", params=load_test_data()["body_types"])
+def get_body_list(request):
+    body_type = request.param
+    yield body_type
+
+
+@fixture(scope="module")
+def get_body(get_body_list, get_config):
+    body_type = get_body_list
+    body_instance = Body(body_type, get_config["supported_engines"])
+    yield body_instance
+  #+end_src
+
+- =config.py=
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/config.py
+class Engine:
+    SUPPORTED_ENGINE_TYPES = ["electrical", "diesel", "hybrid"]
+
+
+    def __init__(self, engine_type):
+        if engine_type is None:
+            raise ValueError("engine_type can't be None")
+
+        self.engine_type = engine_type.lower()
+
+        if self.engine_type not in self.SUPPORTED_ENGINE_TYPES:
+            raise ValueError(f"{engine_type} is not amoung supported engine types: {self.SUPPORTED_ENGINE_TYPES}")
+
+        self.engine = {
+            "electrical": "Electrical Engine",
+            "diesel": "Diesel Engine",
+            "hybrid": "Hybrid Engine",
+        }[self.engine_type]
+
+
+
+    def engine_run_fundamental_functions(self, serial_numbers):
+        print(f"Engine type is {self.engine_type}")
+        print("initial value", serial_numbers)
+        if ("electrical" == self.engine_type):
+            serial_numbers.append("hello")
+            print("value after append", serial_numbers)
+
+        return True
+
+
+class Body:
+    SUPPORTED_BODY_TYPES = ["coupes", "cabriolets"]
+
+
+    def __init__(self, body_type, supported_engines):
+        if body_type is None:
+            raise ValueError("body_type can't be None")
+
+        self.body_type = body_type.lower()
+
+        if self.body_type not in self.SUPPORTED_BODY_TYPES:
+            raise ValueError(f"{body_type} is not amoung supported body types: {self.SUPPORTED_BODY_TYPES}")
+
+        self.body = {
+            "coupes": "coupes body",
+            "cabriolets": "cabriolets body",
+        }[self.body_type]
+
+        self.supported_engines = supported_engines[self.body_type]
+
+
+    def is_engine_compatible(self, engine):
+        if engine.engine_type in self.supported_engines:
+            return True
+        return False
+  #+end_src
+
+- =test_body.py=
+  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/body/test_body.py
+from pytest import mark
+from pytest import xfail
+
+
+@mark.body
+def test_body_functions_as_expected():
+    assert True
+
+
+@mark.smoke
+@mark.body
+def test_fundamental_body_functions_as_expected(serial_number_from_file):
+    print()
+    serial_number = serial_number_from_file
+    print("initial value", serial_number)
+    serial_number.append("hello")
+    print("value after append", serial_number)
+    assert True
+
+
+@mark.smoke
+@mark.body
+@mark.engine
+def test_body_engine_compatibility(get_body, get_engine):
+    is_compatible = get_body.is_engine_compatible(get_engine)
+    if is_compatible:
+        print(f"\n{get_body.body_type} is compatible with engine {get_engine.engine_type}")
+    else:
+        print(f"\n{get_body.body_type} is not compatible with engine {get_engine.engine_type}")
+
+    if not is_compatible and get_body.body_type == 'coupes' and get_engine.engine_type == 'hybrid':
+        xfail(reason=f"{get_engine.engine_type} engine is not supported for {get_body.body_type}")
+    assert is_compatible
+  #+end_src
+
+
 ** Fast Testing with Pytest-xdist, and Parallel vs Concurrent
 ** Writing Unit Tests (White Box Testing) with Tox
 ** Writing Functional Tests (Black/Grey Box Testing)

@@ -1,0 +1,6 @@
+{
+    "supported_engines": {
+        "coupes": ["electrical", "diesel"],
+        "cabriolets": ["electrical", "diesel", "hybrid"]
+    }
+}
