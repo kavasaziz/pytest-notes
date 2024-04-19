@@ -21,5 +21,10 @@ class BatteryTests:
         print("value after append", serial_number)
         assert True
 
+    @mark.smoke
+    def test_battery_units_health(self, get_battery_unit):
+        assert True == get_battery_unit.battery_measure_cell_health()
+
+
     def test_battery_functions_as_expected(self):
         assert True

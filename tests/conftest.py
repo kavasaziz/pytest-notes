@@ -5,7 +5,7 @@ from pytest import fixture
 
 from config import Body
 from config import Engine
-
+from config import Battery
 
 # function is the default scope
 @fixture(scope='module')
@@ -26,19 +26,19 @@ def serial_number_from_file():
 
 # Add parsers for cli arguments
 def pytest_addoption(parser):
-    parser.addoption(
-        "--engine-type",
-        action="store",
-        default="diesel", # not suggested for real-life practices
-        # dest='engine_type',
-        help="Engine type for the vehicle under test"
-    )
-    parser.addoption(
-        "--config",
-        action="store",
-        default="config.json", # not suggested
-        help="Path of config file"
-    )
+    # default values not suggested for real-life practices
+    options = [
+        ("--engine-type", "diesel", "Engine type for the vehicle under test"),
+        ("--config", "config.json", "Path of config file"),
+    ]
+
+    for option, default, help_msg in options:
+        parser.addoption(
+            option,
+            action="store",
+            default=default,
+            help=help_msg
+        )
 
 
 # cli argument return options
@@ -86,3 +86,16 @@ def get_body(get_body_list, get_config):
     body_type = get_body_list
     body_instance = Body(body_type, get_config["supported_engines"])
     yield body_instance
+
+
+@fixture(scope="session", params=load_test_data()["battery_units"])
+def get_battery_info(request):
+    battery_unit = request.param
+    yield battery_unit
+
+
+@fixture(scope="module")
+def get_battery_unit(get_battery_info):
+    battery_info = get_battery_info
+    battery_unit = Battery(battery_info)
+    yield battery_unit

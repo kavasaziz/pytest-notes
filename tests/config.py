@@ -54,3 +54,32 @@ class Body:
         if engine.engine_type in self.supported_engines:
             return True
         return False
+
+import time
+
+class Battery:
+
+    SUPPORTED_BATTERY_TYPES = ["alpha", "gamma", "prime"]
+
+
+    def __init__(self, battery_info):
+        if battery_info["type_info"] is None:
+            raise ValueError("body_type can't be None")
+
+        self.type_info = battery_info["type_info"].lower()
+
+        if self.type_info not in self.SUPPORTED_BATTERY_TYPES:
+            raise ValueError(f"{self.type_info} is not amoung supported body types: {self.SUPPORTED_BATTERY_TYPES}")
+
+        self.battery_interface = {
+            "alpha": "INTERFACE_A",
+            "gamma": "INTERFACE_G",
+            "prime": "INTERFACE_P"
+        }[self.type_info]
+
+        self.capacity = int(battery_info["capacity"])
+
+
+    def battery_measure_cell_health(self):
+        time.sleep(self.capacity)
+        return True

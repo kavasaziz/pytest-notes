@@ -2,13 +2,17 @@
 #+startup: show2levels
 
 * Pytest Testing Framework
+** Helpers :noexport:
+#+BEGIN_SRC emacs-lisp :session venv
+(pyvenv-activate "~/venvs/frameworkenv/venv")
+#+END_SRC
 ** Table of Contents :TOC:
 - [[#pytest-testing-framework][Pytest Testing Framework]]
   - [[#installation][Installation]]
   - [[#pytest-introduction][PyTest Introduction]]
   - [[#test-searching][Test Searching]]
   - [[#save-time-and-code-with-test-fixtures][Save Time and Code with Test Fixtures]]
-  - [[#basics-of-reporting-test-results-and-tracking-test-history][Basics of Reporting Test Results and Tracking Test History]]
+  - [[#basics-of-test-results-reporting-and-tracking-test-history][Basics of Test Results Reporting and Tracking Test History]]
   - [[#customizing-test-runs-with-the-command-line-and-configuration-files][Customizing Test Runs with the Command Line and Configuration Files]]
   - [[#handling-skips-and-expected-failures][Handling Skips and Expected Failures]]
   - [[#cross-browser-and-data-driven-testing-with-parametrize][Cross-Browser and Data-driven testing with parametrize]]
@@ -358,7 +362,7 @@ def test_entertainment_functions_as_expected(serial_number_from_file):
     assert True
   #+end_src
 - battery
-  #+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/battery/test_battery.py
+  #+begin_src python
 from pytest import mark
 
 
@@ -722,7 +726,6 @@ PASSED
 Electrical Engine destroyed
 ...
 #+end_example
-
 
 ** Handling Skips and Expected Failures
 
@@ -1136,7 +1139,7 @@ Until now, we have achieved to decouple our tests from the test data and test lo
 Test data is unique for specifci use case, and thus, there will be multiple of them. Therefore, unlike the config file, it is not intiutive to read it once and keep it into memory throughout the session because same test data will not be used multiple times.
 
 Until now, we have used test data for test parametrization. Therefore, ~body_type~ can be put inside test data file.
-#+begin_src json :tangle ~/venvs/frameworkenv/test_data/test_data.json
+#+begin_src json
 {
     "body_types": ["coupes", "cabriolets"]
 }
@@ -1226,7 +1229,7 @@ pytest -m "engine and smoke and body" --engine-type=hybrid -v -rxs -s
 In this point, note that turning the path of =config.json= and =test_data/test_data.json= into a command line argument would be a better practice. For now, I will update cli arguments for =config.json=, but for test data this is rather complicated and beyond our knowledge for now. Therefore, I will leave it as future work. Together with this change, the final version of updated files are given below:
 
 - =conftest.py=
-  #+begin_src python :tangle ~/venvs/frameworkenv/tests/conftest.py
+  #+begin_src python
 import re
 import json
 
@@ -1414,7 +1417,249 @@ def test_body_engine_compatibility(get_body, get_engine):
     assert is_compatible
   #+end_src
 
-
 ** Fast Testing with Pytest-xdist, and Parallel vs Concurrent
+To add parallel execution capability to ~pytest~, we use ~pyest-xdist~ package. This can help us to gain significant amount of time while we are working on a IO bounded works.
+#+begin_src shell :shebang #!/usr/bin/env bash :results output
+python -m pip install pytest-xdist
+#+end_src
+
+Then run the ~pytest~ with ~-n<number-of-threads>~ flag introduced via ~pytest-xdist~
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "battery" -v -rxs -s -n4
+#+end_src
+
+One issue with paralel testing if you haven't write isolated tests, namely one of the test is effecting the state of other test, such as growing serial number list, errors that you have faced may not be reporducible. Besides, this is not only the case for parallel executions, it is also true even if the tests are not run in parallel. Therefore, to utilize parallel execution capability and to have less error-pruno test suite, write isolated tests case. If you wish to create a complex test state, use test data files.
+
+#+begin_quote
+ Depending on number passed to ~-n~ flag, ~pytest-xdist~ can decide on running a package the test suite parallel or concurrently. To leave the decision to system, you can just pass ~-nauto~
+#+end_quote
+
+For our scenario, we can easily say battery units inside a car does not necessarily needs to be tested in sequence. Besides, testing batteries can take longer than you can think of. For this purpose first lets add some other test data to our suite:
+
+#+begin_src json :tangle ~/venvs/frameworkenv/test_data/test_data.json
+{
+    "body_types": ["coupes", "cabriolets"],
+    "battery_units": [
+        {"type_info": "alpha", "capacity": "5"},
+        {"type_info": "gamma", "capacity": "5"},
+        {"type_info": "prime", "capacity": "5"}
+    ]
+}
+#+end_src
+
+However, in this point, there are some refactorization issues that we need to consider:
+- Parser options has started get large and hard to read. Therefore, we need to make it easy to read and refactor
+- To avoid code duplicaitions, we need to parameterize battery intances via fixture, just as we did previously.
+
+Considering all the issues mentioned above the final version of =conftest.py= is given below:
+#+begin_src python :tangle ~/venvs/frameworkenv/tests/conftest.py
+import re
+import json
+
+from pytest import fixture
+
+from config import Body
+from config import Engine
+from config import Battery
+
+# function is the default scope
+@fixture(scope='module')
+def serial_number_from_file():
+    with open('sample_file.txt', 'r') as file:
+        sample_string = file.read()
+
+    # Define the regex pattern to match MAC addresses
+    pattern = r"SerialNumber=[0-9]+"
+
+    # Find all matches of the pattern in the string
+    matches = re.findall(pattern, sample_string)
+
+    # Extract MAC addresses from matches
+    serial_number = [match.split('=')[1] for match in matches]
+    return serial_number
+
+
+# Add parsers for cli arguments
+def pytest_addoption(parser):
+    # default values not suggested for real-life practices
+    options = [
+        ("--engine-type", "diesel", "Engine type for the vehicle under test"),
+        ("--config", "config.json", "Path of config file"),
+    ]
+
+    for option, default, help_msg in options:
+        parser.addoption(
+            option,
+            action="store",
+            default=default,
+            help=help_msg
+        )
+
+
+# cli argument return options
+@fixture(scope='session')
+def get_engine_type(request):
+    return request.config.getoption("--engine-type")
+
+
+@fixture(scope='session')
+def get_config_path(request):
+    return request.config.getoption("--config")
+
+
+TEST_DATA_PATH = "test_data/test_data.json"
+
+
+def load_test_data(path=TEST_DATA_PATH):
+    with open(path) as test_data_file:
+        return json.load(test_data_file)
+
+
+# Test instances used throughout the test execution
+@fixture(scope='session')
+def get_engine(get_engine_type):
+    engine = Engine(get_engine_type)
+    print(f"\n{engine.engine} created")
+    yield engine
+    print(f"\n{engine.engine} destroyed")
+
+
+@fixture(scope="session")
+def get_config(get_config_path):
+    with open(get_config_path) as config_file:
+        yield json.load(config_file)
+
+
+@fixture(scope="session", params=load_test_data()["body_types"])
+def get_body_list(request):
+    body_type = request.param
+    yield body_type
+
+
+@fixture(scope="module")
+def get_body(get_body_list, get_config):
+    body_type = get_body_list
+    body_instance = Body(body_type, get_config["supported_engines"])
+    yield body_instance
+
+
+@fixture(scope="session", params=load_test_data()["battery_units"])
+def get_battery_info(request):
+    battery_unit = request.param
+    yield battery_unit
+
+
+@fixture(scope="module")
+def get_battery_unit(get_battery_info):
+    battery_info = get_battery_info
+    battery_unit = Battery(battery_info)
+    yield battery_unit
+#+end_src
+
+Another point of testing is to keep our test logic seperated from executed code. For instance, if we are going to test the battery health measurments, the code making measurment should be seperated from the one which will test the measurments. Therefore, we need to add another class here to =config.py= to encapsulte our battery logic.
+#+begin_src python :tangle ~/venvs/frameworkenv/tests/config.py
+import time
+
+class Battery:
+
+    SUPPORTED_BATTERY_TYPES = ["alpha", "gamma", "prime"]
+
+
+    def __init__(self, battery_info):
+        if battery_info["type_info"] is None:
+            raise ValueError("body_type can't be None")
+
+        self.type_info = battery_info["type_info"].lower()
+
+        if self.type_info not in self.SUPPORTED_BATTERY_TYPES:
+            raise ValueError(f"{self.type_info} is not amoung supported body types: {self.SUPPORTED_BATTERY_TYPES}")
+
+        self.battery_interface = {
+            "alpha": "INTERFACE_A",
+            "gamma": "INTERFACE_G",
+            "prime": "INTERFACE_P"
+        }[self.type_info]
+
+        self.capacity = int(battery_info["capacity"])
+
+
+    def battery_measure_cell_health(self):
+        time.sleep(self.capacity)
+        return True
+#+end_src
+
+In that point, health measurment of our battery will take time proportional with the capacity of battery, so that we can see the effect of parallel execution clearly.
+
+Finally, we need to rewrite our test for battery:
+#+begin_src python :tangle ~/venvs/frameworkenv/tests/sportscar/battery/test_battery.py
+from pytest import mark
+
+
+@mark.battery
+class BatteryTests:
+    @mark.smoke
+    def test_fundamental_battery_functions_as_expected(self, serial_number_from_file):
+        print()
+        serial_number = serial_number_from_file
+        print("initial value", serial_number)
+        serial_number.append("hello")
+        print("value after append", serial_number)
+        assert True
+
+    @mark.smoke
+    def test_other_fundamental_battery_functions_as_expected(self, serial_number_from_file):
+        print()
+        serial_number = serial_number_from_file
+        print("initial value", serial_number)
+        serial_number.append("hello")
+        print("value after append", serial_number)
+        assert True
+
+    @mark.smoke
+    def test_battery_units_health(self, get_battery_unit):
+        assert True == get_battery_unit.battery_measure_cell_health()
+
+
+    def test_battery_functions_as_expected(self):
+        assert True
+#+end_src
+
+Now, run the battery test and see how long does it take:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output
+pytest -m "battery" -v -rxXs -s
+#+end_src
+
+As you could also notice, it took more than 15s as expected. However, by allowing parallel test execution, we can decreate it upto 5-6s.
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output :session venv
+time pytest -m "battery" -v -rxXs -s -n auto
+#+end_src
+
+Here is the sample output of it, and you can also see consumed time below:
+#+begin_example
+...
+plugins: html-4.1.1, xdist-3.5.0, metadata-3.1.1
+created: 8/8 workersinitialized: 1/8 workersinitialized: 2/8 workersinitialized: 3/8 workersinitialized: 4/8 workersinitialized: 5/8 workersinitialized: 6/8 workersinitialized: 7/8 workersinitialized: 8/8 workersready: 1/8 workers      collecting: 1/8 workerscollecting: 1/8 workerscollecting: 2/8 workerscollecting: 2/8 workerscollecting: 2/8 workerscollecting: 3/8 workerscollecting: 4/8 workerscollecting: 4/8 workerscollecting: 4/8 workerscollecting: 5/8 workerscollecting: 6/8 workerscollecting: 6/8 workerscollecting: 6/8 workerscollecting: 7/8 workers8 workers [6 items]
+scheduling tests via LoadScheduling
+
+tests/sportscar/battery/test_battery.py::BatteryTests::test_battery_functions_as_expected
+tests/sportscar/battery/test_battery.py::BatteryTests::test_battery_units_health[get_battery_info2]
+tests/sportscar/battery/test_battery.py::BatteryTests::test_battery_units_health[get_battery_info1]
+tests/sportscar/battery/test_battery.py::BatteryTests::test_battery_units_health[get_battery_info0]
+tests/sportscar/battery/test_battery.py::BatteryTests::test_other_fundamental_battery_functions_as_expected
+tests/sportscar/battery/test_battery.py::BatteryTests::test_fundamental_battery_functions_as_expected
+[gw0] PASSED tests/sportscar/battery/test_battery.py::BatteryTests::test_fundamental_battery_functions_as_expected
+[gw6] PASSED tests/sportscar/battery/test_battery.py::BatteryTests::test_battery_functions_as_expected
+[gw1] PASSED tests/sportscar/battery/test_battery.py::BatteryTests::test_other_fundamental_battery_functions_as_expected
+[gw3] PASSED tests/sportscar/battery/test_battery.py::BatteryTests::test_battery_units_health[get_battery_info1]
+[gw2] PASSED tests/sportscar/battery/test_battery.py::BatteryTests::test_battery_units_health[get_battery_info0]
+[gw4] PASSED tests/sportscar/battery/test_battery.py::BatteryTests::test_battery_units_health[get_battery_info2]
+
+...
+
+real	0m5.706s
+user	0m2.561s
+sys	0m0.199s
+#+end_example
+
 ** Writing Unit Tests (White Box Testing) with Tox
 ** Writing Functional Tests (Black/Grey Box Testing)
