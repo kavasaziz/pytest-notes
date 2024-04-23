@@ -1662,4 +1662,16 @@ sys	0m0.199s
 #+end_example
 
 ** Writing Unit Tests (White Box Testing) with Tox
+Until now, we have mentioned about many paramter and options, and we have used them most of the time. To be honest, those should be set as default so that they should not create extra load over our users. To achieve it, lets add followings to =pytest.ini= file:
+#+begin_src toml :tangle ~/venvs/frameworkenv/pytest.ini
+addopts = -v -vv -rxXs
+#+end_src
+
+So, after this we can just run last used command as:
+#+begin_src shell :shebang #!/usr/bin/env bash :dir ~/venvs/frameworkenv/ :results output :session venv
+time pytest -m "battery" -s -n auto
+#+end_src
+
+Okay, lets go back to our main subject which is *unittest*. Even though, there are various approaches about unittest structurization
+
 ** Writing Functional Tests (Black/Grey Box Testing)
